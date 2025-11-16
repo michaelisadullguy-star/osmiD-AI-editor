@@ -1,0 +1,37 @@
+# Environment
+.env
+venv/
+env/
+*.pyc
+__pycache__/
+
+# Data
+data/
+*.osm
+*.geojson
+*.tif
+*.png
+*.jpg
+
+# Models
+models/
+*.h5
+*.pt
+*.pth
+checkpoints/
+
+# Build
+build/
+dist/
+*.exe
+*.spec
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
