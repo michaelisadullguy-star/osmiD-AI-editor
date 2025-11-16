@@ -2,28 +2,29 @@
 Part 1: OSM Data Downloader using Overpass API
 Downloads OpenStreetMap data for specified cities including buildings,
 lawns, natural woods, artificial forests, and water bodies.
+
+Security improvements:
+- Proper error handling with specific exceptions
+- Logging instead of print statements
+- Rate limiting with exponential backoff
 """
 
 import overpy
 import json
 import os
-from typing import Dict, List, Tuple
-import time
+from typing import Dict, List
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from common import CITIES, setup_logging
+from common.retry import retry_with_backoff, RateLimiter
+from common.logging_config import LoggerMixin
+
+logger = setup_logging('osmid.data_acquisition')
 
 
-class OSMDownloader:
+class OSMDownloader(LoggerMixin):
     """Download OSM data for specified cities using Overpass API"""
-
-    # City bounding boxes [south, west, north, east]
-    CITIES = {
-        'paris': [48.815573, 2.224199, 48.902145, 2.469920],
-        'london': [51.286760, -0.510375, 51.691874, 0.334015],
-        'new_york': [40.477399, -74.259090, 40.917577, -73.700272],
-        'hong_kong': [22.153689, 113.835079, 22.561968, 114.406844],
-        'moscow': [55.491878, 37.319336, 55.957565, 37.967987],
-        'tokyo': [35.528874, 139.560547, 35.817813, 139.910278],
-        'singapore': [1.205764, 103.604736, 1.470974, 104.028320]
-    }
 
     def __init__(self, output_dir: str = './data/osm'):
         """
@@ -35,6 +36,9 @@ class OSMDownloader:
         self.api = overpy.Overpass()
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
+        self.rate_limiter = RateLimiter(calls_per_second=0.5)  # 1 call per 2 seconds
+
+        self.logger.info(f"Initialized OSM downloader, output dir: {output_dir}")
 
     def build_query(self, bbox: List[float], features: List[str]) -> str:
         """
@@ -62,6 +66,8 @@ class OSMDownloader:
         for feature in features:
             if feature in feature_queries:
                 query_parts.append(feature_queries[feature])
+            else:
+                self.logger.warning(f"Unknown feature type: {feature}")
 
         query = f"""
         [out:json][timeout:300];
@@ -73,6 +79,12 @@ class OSMDownloader:
 
         return query
 
+    @retry_with_backoff(max_retries=4, base_delay=2.0, exceptions=(overpy.exception.OverpassTooManyRequests, overpy.exception.OverpassGatewayTimeout))
+    def _query_with_retry(self, query: str):
+        """Execute Overpass query with retry logic"""
+        with self.rate_limiter:
+            return self.api.query(query)
+
     def download_city_data(self, city: str, features: List[str] = None) -> Dict:
         """
         Download OSM data for a specific city
@@ -83,36 +95,52 @@ class OSMDownloader:
 
         Returns:
             Dictionary containing OSM data
+
+        Raises:
+            ValueError: If city is not in CITIES
+            overpy.exception.OverpassException: If API query fails
         """
-        if city not in self.CITIES:
-            raise ValueError(f"City {city} not in available cities: {list(self.CITIES.keys())}")
+        if city not in CITIES:
+            raise ValueError(f"City '{city}' not in available cities: {list(CITIES.keys())}")
 
         if features is None:
             features = ['buildings', 'lawns', 'natural_woods', 'artificial_forests', 'water_bodies']
 
-        bbox = self.CITIES[city]
+        bbox = CITIES[city]
         query = self.build_query(bbox, features)
 
-        print(f"Downloading OSM data for {city}...")
-        print(f"Query: {query[:100]}...")
+        self.logger.info(f"Downloading OSM data for {city}...")
+        self.logger.debug(f"Query: {query[:100]}...")
 
         try:
-            result = self.api.query(query)
+            result = self._query_with_retry(query)
 
             # Convert result to GeoJSON format
             geojson = self._convert_to_geojson(result, city, features)
 
             # Save to file
             output_file = os.path.join(self.output_dir, f"{city}.geojson")
-            with open(output_file, 'w') as f:
+            with open(output_file, 'w', encoding='utf-8') as f:
                 json.dump(geojson, f, indent=2)
 
-            print(f"✓ Saved {len(geojson['features'])} features to {output_file}")
+            self.logger.info(f"Saved {len(geojson['features'])} features to {output_file}")
 
             return geojson
 
+        except overpy.exception.OverpassTooManyRequests as e:
+            self.logger.error(f"Rate limit exceeded for {city}: {e}")
+            raise
+        except overpy.exception.OverpassGatewayTimeout as e:
+            self.logger.error(f"Gateway timeout for {city}: {e}")
+            raise
+        except overpy.exception.OverpassException as e:
+            self.logger.error(f"Overpass API error for {city}: {e}")
+            raise
+        except (IOError, OSError) as e:
+            self.logger.error(f"File I/O error for {city}: {e}")
+            raise
         except Exception as e:
-            print(f"✗ Error downloading data for {city}: {str(e)}")
+            self.logger.exception(f"Unexpected error downloading data for {city}")
             raise
 
     def _convert_to_geojson(self, result, city: str, features: List[str]) -> Dict:
@@ -131,33 +159,48 @@ class OSMDownloader:
             "type": "FeatureCollection",
             "metadata": {
                 "city": city,
-                "features": features
+                "features": features,
+                "generator": "osmiD-AI-editor v1.0"
             },
             "features": []
         }
 
         # Process ways
         for way in result.ways:
-            coords = [[float(node.lon), float(node.lat)] for node in way.nodes]
+            try:
+                coords = [[float(node.lon), float(node.lat)] for node in way.nodes]
 
-            # Determine feature type
-            feature_type = self._determine_feature_type(way.tags)
+                if not coords:
+                    self.logger.warning(f"Skipping way {way.id} with no coordinates")
+                    continue
 
-            feature = {
-                "type": "Feature",
-                "id": way.id,
-                "geometry": {
-                    "type": "Polygon" if coords[0] == coords[-1] else "LineString",
-                    "coordinates": [coords] if coords[0] == coords[-1] else coords
-                },
-                "properties": {
-                    "osm_id": way.id,
-                    "feature_type": feature_type,
-                    "tags": way.tags
+                # Determine feature type
+                feature_type = self._determine_feature_type(way.tags)
+
+                # Determine geometry type
+                is_closed = len(coords) > 2 and coords[0] == coords[-1]
+                geometry_type = "Polygon" if is_closed else "LineString"
+                geometry_coords = [coords] if is_closed else coords
+
+                feature = {
+                    "type": "Feature",
+                    "id": way.id,
+                    "geometry": {
+                        "type": geometry_type,
+                        "coordinates": geometry_coords
+                    },
+                    "properties": {
+                        "osm_id": way.id,
+                        "feature_type": feature_type,
+                        "tags": way.tags
+                    }
                 }
-            }
 
-            geojson["features"].append(feature)
+                geojson["features"].append(feature)
+
+            except (ValueError, AttributeError) as e:
+                self.logger.warning(f"Error processing way {way.id}: {e}")
+                continue
 
         return geojson
 
@@ -183,14 +226,19 @@ class OSMDownloader:
         Args:
             features: List of features to download (default: all)
         """
-        for city in self.CITIES.keys():
+        successful = 0
+        failed = 0
+
+        for city in CITIES.keys():
             try:
                 self.download_city_data(city, features)
-                # Rate limiting
-                time.sleep(2)
+                successful += 1
             except Exception as e:
-                print(f"Failed to download {city}: {str(e)}")
+                self.logger.error(f"Failed to download {city}: {e}")
+                failed += 1
                 continue
+
+        self.logger.info(f"Download complete: {successful} successful, {failed} failed")
 
 
 if __name__ == "__main__":
