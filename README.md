@@ -296,7 +296,7 @@ If you use this project in your research, please cite:
 ```bibtex
 @software{osmid_ai_editor,
   title={osmiD-AI-editor: AI-Powered Automated OSM Feature Mapper},
-  author={Your Name},
+  author={Yinhao Wang},
   year={2025},
   url={https://github.com/michaelisadullguy-star/osmiD-AI-editor}
 }
