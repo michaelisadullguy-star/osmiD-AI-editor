@@ -1,6 +1,6 @@
 # osmiD-AI-editor
 
-**AI-Powered Automated OpenStreetMap Feature Mapper**
+**Machine Learning-Based Automated OpenStreetMap Feature Mapper**
 
 An advanced machine learning system that automatically detects and maps geographic features (buildings, lawns, natural woods, artificial forests, and water bodies) to OpenStreetMap using satellite imagery.
 
@@ -295,7 +295,7 @@ If you use this project in your research, please cite:
 
 ```bibtex
 @software{osmid_ai_editor,
-  title={osmiD-AI-editor: AI-Powered Automated OSM Feature Mapper},
+  title={osmiD-AI-editor: Machine Learning-Based Automated OpenStreetMap Feature Mapper},
   author={Yinhao Wang},
   year={2025},
   url={https://github.com/michaelisadullguy-star/osmiD-AI-editor}
