@@ -204,7 +204,7 @@ class OSMClient:
         self,
         features: List[Dict],
         changeset_comment: str = "AI-assisted feature mapping"
-    ) -> List[int]:
+    ) -> Dict:
         """
         Upload multiple features to OSM
 
@@ -213,15 +213,16 @@ class OSMClient:
             changeset_comment: Comment for the changeset
 
         Returns:
-            List of created way IDs
+            Dictionary with changeset info and created way IDs
         """
         if not self.authenticated:
             raise Exception("Not authenticated")
 
         # Create changeset
-        self.create_changeset(changeset_comment)
+        changeset_id = self.create_changeset(changeset_comment)
 
         way_ids = []
+        feature_counts = {}
 
         try:
             for i, feature in enumerate(features):
@@ -236,6 +237,11 @@ class OSMClient:
                     )
 
                 way_ids.append(way_id)
+
+                # Count features by type
+                feature_type = feature['type']
+                feature_counts[feature_type] = feature_counts.get(feature_type, 0) + 1
+
                 time.sleep(0.5)  # Rate limiting
 
             print(f"\n✓ Successfully uploaded {len(way_ids)} features")
@@ -248,7 +254,15 @@ class OSMClient:
             # Close changeset
             self.close_changeset()
 
-        return way_ids
+        # Return changeset information
+        return {
+            'changeset_id': changeset_id,
+            'changeset_url': f"https://www.openstreetmap.org/changeset/{changeset_id}",
+            'way_ids': way_ids,
+            'feature_counts': feature_counts,
+            'total_features': len(way_ids),
+            'comment': changeset_comment
+        }
 
 
 if __name__ == "__main__":

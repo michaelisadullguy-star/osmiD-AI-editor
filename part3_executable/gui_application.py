@@ -13,10 +13,10 @@ from PIL import Image
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QTextEdit, QProgressBar,
-    QMessageBox, QGroupBox
+    QMessageBox, QGroupBox, QDialog
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
-from PyQt5.QtGui import QFont
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QUrl
+from PyQt5.QtGui import QFont, QDesktopServices
 
 from osm_client import OSMClient
 from feature_detector import FeatureDetector
@@ -26,7 +26,7 @@ class MappingWorker(QThread):
     """Worker thread for feature detection and mapping"""
 
     progress = pyqtSignal(str)
-    finished = pyqtSignal(bool, str)
+    finished = pyqtSignal(bool, str, object)  # success, message, changeset_info
 
     def __init__(
         self,
@@ -141,20 +141,143 @@ class MappingWorker(QThread):
 
             # Upload features
             self.progress.emit("\nUploading features to OpenStreetMap...")
-            way_ids = osm_client.upload_features(
+            changeset_info = osm_client.upload_features(
                 features,
                 changeset_comment="AI-assisted feature mapping via osmiD-AI-editor"
             )
 
-            self.progress.emit(f"\n✓ Successfully uploaded {len(way_ids)} features!")
-            self.progress.emit(f"  Created way IDs: {way_ids[:10]}{'...' if len(way_ids) > 10 else ''}")
+            self.progress.emit(f"\n✓ Successfully uploaded {changeset_info['total_features']} features!")
+            self.progress.emit(f"  Changeset ID: {changeset_info['changeset_id']}")
+            self.progress.emit(f"  Changeset URL: {changeset_info['changeset_url']}")
 
-            self.finished.emit(True, f"Successfully mapped {len(way_ids)} features!")
+            self.finished.emit(True, f"Successfully mapped {changeset_info['total_features']} features!", changeset_info)
 
         except Exception as e:
             error_msg = f"Error: {str(e)}"
             self.progress.emit(f"\n✗ {error_msg}")
-            self.finished.emit(False, error_msg)
+            self.finished.emit(False, error_msg, None)
+
+
+class ChangesetDialog(QDialog):
+    """Dialog to display changeset information"""
+
+    def __init__(self, changeset_info: dict, parent=None):
+        super().__init__(parent)
+        self.changeset_info = changeset_info
+        self.init_ui()
+
+    def init_ui(self):
+        """Initialize dialog UI"""
+        self.setWindowTitle("OSM Changeset Created")
+        self.setModal(True)
+        self.setMinimumWidth(500)
+
+        layout = QVBoxLayout()
+        layout.setSpacing(15)
+
+        # Title
+        title = QLabel("✓ Successfully Created OSM Changeset")
+        title_font = QFont()
+        title_font.setPointSize(14)
+        title_font.setBold(True)
+        title.setFont(title_font)
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet("color: #4CAF50;")
+        layout.addWidget(title)
+
+        # Changeset info group
+        info_group = QGroupBox("Changeset Details")
+        info_layout = QVBoxLayout()
+
+        # Changeset ID
+        changeset_id_layout = QHBoxLayout()
+        changeset_id_label = QLabel("Changeset ID:")
+        changeset_id_label.setStyleSheet("font-weight: bold;")
+        changeset_id_value = QLabel(str(self.changeset_info['changeset_id']))
+        changeset_id_value.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        changeset_id_layout.addWidget(changeset_id_label)
+        changeset_id_layout.addWidget(changeset_id_value)
+        changeset_id_layout.addStretch()
+        info_layout.addLayout(changeset_id_layout)
+
+        # Total features
+        total_layout = QHBoxLayout()
+        total_label = QLabel("Total Features:")
+        total_label.setStyleSheet("font-weight: bold;")
+        total_value = QLabel(str(self.changeset_info['total_features']))
+        total_value.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        total_layout.addWidget(total_label)
+        total_layout.addWidget(total_value)
+        total_layout.addStretch()
+        info_layout.addLayout(total_layout)
+
+        # Feature breakdown
+        if self.changeset_info.get('feature_counts'):
+            breakdown_label = QLabel("Feature Breakdown:")
+            breakdown_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
+            info_layout.addWidget(breakdown_label)
+
+            for feature_type, count in self.changeset_info['feature_counts'].items():
+                feature_layout = QHBoxLayout()
+                feature_name = QLabel(f"  • {feature_type.replace('_', ' ').title()}:")
+                feature_count = QLabel(str(count))
+                feature_layout.addWidget(feature_name)
+                feature_layout.addWidget(feature_count)
+                feature_layout.addStretch()
+                info_layout.addLayout(feature_layout)
+
+        # Comment
+        comment_label = QLabel("Comment:")
+        comment_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
+        info_layout.addWidget(comment_label)
+
+        comment_value = QLabel(self.changeset_info['comment'])
+        comment_value.setWordWrap(True)
+        comment_value.setStyleSheet("margin-left: 10px; font-style: italic;")
+        info_layout.addWidget(comment_value)
+
+        info_group.setLayout(info_layout)
+        layout.addWidget(info_group)
+
+        # URL section
+        url_group = QGroupBox("View on OpenStreetMap")
+        url_layout = QVBoxLayout()
+
+        url_label = QLabel("Click the link below to view your changeset on OpenStreetMap:")
+        url_layout.addWidget(url_label)
+
+        # Clickable URL
+        url_text = QLabel(f'<a href="{self.changeset_info["changeset_url"]}">{self.changeset_info["changeset_url"]}</a>')
+        url_text.setOpenExternalLinks(True)
+        url_text.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        url_text.setStyleSheet("font-size: 11pt; color: #2196F3;")
+        url_layout.addWidget(url_text)
+
+        url_group.setLayout(url_layout)
+        layout.addWidget(url_group)
+
+        # Buttons
+        button_layout = QHBoxLayout()
+
+        # Open in browser button
+        open_button = QPushButton("Open in Browser")
+        open_button.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold; padding: 8px;")
+        open_button.clicked.connect(self.open_in_browser)
+        button_layout.addWidget(open_button)
+
+        # Close button
+        close_button = QPushButton("Close")
+        close_button.setStyleSheet("padding: 8px;")
+        close_button.clicked.connect(self.accept)
+        button_layout.addWidget(close_button)
+
+        layout.addLayout(button_layout)
+
+        self.setLayout(layout)
+
+    def open_in_browser(self):
+        """Open changeset URL in default browser"""
+        QDesktopServices.openUrl(QUrl(self.changeset_info['changeset_url']))
 
 
 class MainWindow(QMainWindow):
@@ -345,7 +468,7 @@ class MainWindow(QMainWindow):
 
         self.statusBar().showMessage("Processing...")
 
-    def mapping_finished(self, success: bool, message: str):
+    def mapping_finished(self, success: bool, message: str, changeset_info: dict):
         """Handle mapping completion"""
         # Re-enable button
         self.start_button.setEnabled(True)
@@ -353,7 +476,14 @@ class MainWindow(QMainWindow):
 
         if success:
             self.statusBar().showMessage("Completed successfully!")
-            QMessageBox.information(self, "Success", message)
+
+            # Show changeset dialog if we have changeset info
+            if changeset_info:
+                dialog = ChangesetDialog(changeset_info, self)
+                dialog.exec_()
+            else:
+                # Fallback to simple message if no changeset info
+                QMessageBox.information(self, "Success", message)
         else:
             self.statusBar().showMessage("Failed")
             QMessageBox.critical(self, "Error", message)
