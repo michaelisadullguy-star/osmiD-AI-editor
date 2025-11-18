@@ -165,7 +165,7 @@ class FeatureCorrelator:
         img_height, img_width = imagery.shape[:2]
 
         # Feature types to process
-        feature_types = ['building', 'lawn', 'natural_wood', 'artificial_forest', 'water_body']
+        feature_types = ['building', 'lawn', 'natural_wood', 'artificial_forest', 'water_body', 'farmland']
 
         masks = {}
 

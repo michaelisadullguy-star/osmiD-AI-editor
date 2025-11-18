@@ -312,7 +312,7 @@ if __name__ == "__main__":
         'log_dir': './logs',
         'train_cities': ['paris', 'london', 'new_york', 'hong_kong', 'moscow'],
         'val_cities': ['tokyo', 'singapore'],
-        'n_classes': 6,
+        'n_classes': 7,
         'batch_size': 8,
         'epochs': 100,
         'learning_rate': 0.001,

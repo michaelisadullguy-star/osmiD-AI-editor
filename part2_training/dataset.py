@@ -26,7 +26,8 @@ class OSMFeatureDataset(Dataset):
         'lawn': 2,
         'natural_wood': 3,
         'artificial_forest': 4,
-        'water_body': 5
+        'water_body': 5,
+        'farmland': 6
     }
 
     def __init__(

@@ -29,7 +29,8 @@ class FeatureDetector:
         2: 'lawn',
         3: 'natural_wood',
         4: 'artificial_forest',
-        5: 'water_body'
+        5: 'water_body',
+        6: 'farmland'
     }
 
     def __init__(self, model_path: str, device: str = 'cpu'):
@@ -47,7 +48,7 @@ class FeatureDetector:
 
         self.model = FeatureSegmentationModel(
             n_channels=3,
-            n_classes=6,
+            n_classes=checkpoint['config'].get('n_classes', 7),
             bilinear=checkpoint['config'].get('bilinear', False)
         )
 
