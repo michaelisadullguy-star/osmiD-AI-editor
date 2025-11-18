@@ -2,7 +2,7 @@
 
 **Machine Learning-Based Automated OpenStreetMap Feature Mapper**
 
-An advanced machine learning system that automatically detects and maps geographic features (buildings, lawns, natural woods, artificial forests, and water bodies) to OpenStreetMap using satellite imagery.
+An advanced machine learning system that automatically detects and maps geographic features (buildings, lawns, natural woods, artificial forests, water bodies, and farmland) to OpenStreetMap using satellite imagery.
 
 ## Overview
 
@@ -13,7 +13,7 @@ The osmiD-AI-editor is divided into three main components:
 - Downloads Mapbox satellite imagery
 - Correlates features in satellite imagery with corresponding OSM data
 - Supported cities: Paris, London, New York, Hong Kong, Moscow, Tokyo, and Singapore
-- Supported features: buildings, lawns, natural woods, artificial forests, and water bodies
+- Supported features: buildings, lawns, natural woods, artificial forests, water bodies, and farmland
 
 ### Part 2: Machine Learning Training
 - U-Net based semantic segmentation model
@@ -179,13 +179,14 @@ The model detects and maps the following feature types:
 | 3        | Natural Wood      | `natural=wood`                    |
 | 4        | Artificial Forest | `landuse=forest`                  |
 | 5        | Water Body        | `natural=water`                   |
+| 6        | Farmland          | `landuse=farmland`                |
 
 ## Model Architecture
 
 - **Base Model**: U-Net with ResNet-like encoder
 - **Input**: RGB satellite imagery (512x512)
 - **Output**:
-  - Semantic segmentation mask (6 classes)
+  - Semantic segmentation mask (7 classes)
   - Contour probability map
 - **Contour Precision**: One point every 3 meters
 - **Parameters**: ~31 million trainable parameters

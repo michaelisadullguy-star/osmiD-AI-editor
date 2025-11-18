@@ -192,7 +192,8 @@ class OSMClient:
             "lawn": {"landuse": "grass", "grass": "lawn"},
             "natural_wood": {"natural": "wood"},
             "artificial_forest": {"landuse": "forest"},
-            "water_body": {"natural": "water"}
+            "water_body": {"natural": "water"},
+            "farmland": {"landuse": "farmland"}
         }
 
         if feature_type not in feature_tags:

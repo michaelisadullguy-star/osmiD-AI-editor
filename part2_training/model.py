@@ -80,10 +80,11 @@ class UNet(nn.Module):
     - Natural woods (class 2)
     - Artificial forests (class 3)
     - Water bodies (class 4)
-    - Background (class 5)
+    - Farmland (class 5)
+    - Background (class 6)
     """
 
-    def __init__(self, n_channels=3, n_classes=6, bilinear=False):
+    def __init__(self, n_channels=3, n_classes=7, bilinear=False):
         super(UNet, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
@@ -121,7 +122,7 @@ class ContourDetectionHead(nn.Module):
     Outputs contour probability maps for each feature class
     """
 
-    def __init__(self, in_channels=64, n_classes=6):
+    def __init__(self, in_channels=64, n_classes=7):
         super().__init__()
         self.contour_conv = nn.Sequential(
             nn.Conv2d(in_channels, 32, kernel_size=3, padding=1),
@@ -140,7 +141,7 @@ class FeatureSegmentationModel(nn.Module):
     Complete model with semantic segmentation and contour detection
     """
 
-    def __init__(self, n_channels=3, n_classes=6, bilinear=False):
+    def __init__(self, n_channels=3, n_classes=7, bilinear=False):
         super().__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
@@ -178,7 +179,7 @@ class FeatureSegmentationModel(nn.Module):
 
 if __name__ == "__main__":
     # Test model
-    model = FeatureSegmentationModel(n_channels=3, n_classes=6)
+    model = FeatureSegmentationModel(n_channels=3, n_classes=7)
     x = torch.randn(1, 3, 512, 512)
     output = model(x)
 

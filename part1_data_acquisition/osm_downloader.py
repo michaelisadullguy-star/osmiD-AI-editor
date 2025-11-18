@@ -59,7 +59,8 @@ class OSMDownloader(LoggerMixin):
             'lawns': f'way["landuse"="grass"]({bbox_str});',
             'natural_woods': f'way["natural"="wood"]({bbox_str});',
             'artificial_forests': f'way["landuse"="forest"]({bbox_str});',
-            'water_bodies': f'(way["natural"="water"]({bbox_str}); way["waterway"]({bbox_str});)'
+            'water_bodies': f'(way["natural"="water"]({bbox_str}); way["waterway"]({bbox_str});)',
+            'farmland': f'way["landuse"="farmland"]({bbox_str});'
         }
 
         query_parts = []
@@ -104,7 +105,7 @@ class OSMDownloader(LoggerMixin):
             raise ValueError(f"City '{city}' not in available cities: {list(CITIES.keys())}")
 
         if features is None:
-            features = ['buildings', 'lawns', 'natural_woods', 'artificial_forests', 'water_bodies']
+            features = ['buildings', 'lawns', 'natural_woods', 'artificial_forests', 'water_bodies', 'farmland']
 
         bbox = CITIES[city]
         query = self.build_query(bbox, features)
@@ -214,6 +215,8 @@ class OSMDownloader(LoggerMixin):
             return 'natural_wood'
         elif tags.get('landuse') == 'forest':
             return 'artificial_forest'
+        elif tags.get('landuse') == 'farmland':
+            return 'farmland'
         elif 'water' in tags.get('natural', '') or 'waterway' in tags:
             return 'water_body'
         else:
